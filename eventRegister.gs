@@ -1,3 +1,4 @@
+// For each person attending the event, add a row to Transactions to deduct the fee from the member's balance
 function onEdit(e) {
   const ss = e.source;
 
@@ -15,6 +16,9 @@ function onEdit(e) {
 
     if (sh.getName() !== 'EVENT REGISTER') return;
     if (newValue !== 'TRUE' && newValue !== true) return;
+
+    const confirmRegisterRange = ss.getRangeByName('events_confirm_register_row');
+    if (!confirmRegisterRange || e.range.getRow() !== confirmRegisterRange.getRow()) return;
 
     const dataStartRow = 7;
     const ts = ss.getSheetByName('Transactions');
