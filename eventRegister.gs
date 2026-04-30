@@ -118,7 +118,7 @@ function onEdit(e) {
 }
 
 function showToast(ss, msg, title = 'Transactions') {
-  ss.toast(msg, title, 6);
+  ss.toast(msg, title, 6); 
 }
 
 function parseMoney(v) {
