@@ -1,76 +1,147 @@
-/**
- * onEdit: when a checkbox is checked (TRUE), replace the block of pasted names
- * directly under the checkbox with the current names from column A that match "Yes"/TRUE
- *
- * Behavior:
- * - Only reacts to the edited cell becoming TRUE (checked).
- * - Clears the contiguous block of cells below the checkbox in the same column,
- *   then writes the fresh list starting on the row immediately below the checkbox.
- * - If no matches, it will still clear the previous pasted block (so the area is empty).
- *
- * Adjust dataStartRow if your names start on a different row. (In your sheet it's row 7.)
- */
 function onEdit(e) {
+  const ss = e.source;
+
+  const result = {
+    successCount: 0,
+    hasPeople: false,
+    invalidFee: false,
+    error: null
+  };
+
   try {
     const sh = e.range.getSheet();
-    const r = e.range;
-    const editedRow = r.getRow();
-    const editedCol = r.getColumn();
-    const newValue = e.value; // for simple onEdit events, checkboxes show "TRUE" (string) or boolean true
+    const editedCol = e.range.getColumn();
+    const newValue = e.value;
 
-    // Only respond when the cell was changed to TRUE (a checked checkbox)
+    if (sh.getName() !== 'EVENT REGISTER') return;
     if (newValue !== 'TRUE' && newValue !== true) return;
 
-    // ---------- CONFIG ----------
-    // Row where the names (column A) start in your sheet. Change if different.
     const dataStartRow = 7;
-    // ----------------------------
+    const ts = ss.getSheetByName('Transactions');
+    if (!ts) throw new Error('Transactions sheet not found');
 
-    // Ensure there's at least some data area
     const lastRow = Math.max(sh.getLastRow(), dataStartRow);
-    if (lastRow < dataStartRow) return;
-
-    // Read names (col A) and corresponding responses in the edited column
     const numRows = lastRow - dataStartRow + 1;
+
     const names = sh.getRange(dataStartRow, 1, numRows, 1).getValues();
     const responses = sh.getRange(dataStartRow, editedCol, numRows, 1).getValues();
 
-    // Build the list of names to write (matches "Yes" or TRUE)
+    const date = sh.getRange(2, editedCol).getValue();
+    const description = `${sh.getRange(1, editedCol).getValue()} ${sh.getRange(4, editedCol).getValue()}`;
+
+    const feeValue = sh.getRange(5, editedCol).getValue();
+    const feeNumberValue = parseMoney(feeValue);
+
+    const transactionValue =
+      typeof feeNumberValue === 'number' && !isNaN(feeNumberValue)
+        ? feeNumberValue * -1
+        : '';
+
+    if (transactionValue === '') result.invalidFee = true;
+
+    // -------- DELETE EXISTING TRANSACTIONS --------
+    const tsData = ts.getDataRange().getValues();
+
+    const filtered = tsData.filter((row, i) => {
+      if (i === 0) return true;
+
+      const rowDate = row[0];
+      const rowDesc = row[3];
+
+      return !(isSameDate(rowDate, date) && rowDesc === description);
+    });
+
+    ts.clearContents();
+    ts.getRange(1, 1, filtered.length, filtered[0].length).setValues(filtered);
+
+    // -------- BUILD NEW TRANSACTIONS --------
     const out = [];
+
     for (let i = 0; i < responses.length; i++) {
       const resp = responses[i][0];
-      if ((typeof resp === 'string' && resp.trim().toLowerCase() === 'yes') ||
-          resp === true ||
-          String(resp).toLowerCase() === 'true') {
-        const nm = names[i][0];
-        if (nm !== "" && nm !== null) out.push([String(nm)]);
+
+      const isYes =
+        (typeof resp === 'string' && resp.trim().toLowerCase() === 'yes') ||
+        resp === true ||
+        String(resp).toLowerCase() === 'true';
+
+      if (isYes) {
+        result.hasPeople = true;
+
+        const person = names[i][0];
+        if (!person) continue;
+
+        out.push([
+          date,
+          "Non-cash",
+          "-",
+          description,
+          transactionValue,
+          "Balance transaction - session",
+          person
+        ]);
+
+        result.successCount++;
       }
     }
 
-    // Destination start row: one row below the checkbox
-    const pasteRow = editedRow + 1;
-
-    // Clear existing contiguous block under the checkbox (so re-checking replaces it)
-    // Find the first blank cell starting at pasteRow
-    let scanRow = pasteRow;
-    const sheetLastRow = sh.getLastRow();
-    while (scanRow <= sheetLastRow) {
-      const val = sh.getRange(scanRow, editedCol).getValue();
-      if (val === "" || val === null) break;
-      scanRow++;
-    }
-    const blockLen = Math.max(0, scanRow - pasteRow);
-    if (blockLen > 0) {
-      sh.getRange(pasteRow, editedCol, blockLen, 1).clearContent();
-    }
-
-    // If there's something to paste, write it starting at pasteRow
+    // IMPORTANT: if no people, we still want deletion only
     if (out.length > 0) {
-      sh.getRange(pasteRow, editedCol, out.length, 1).setValues(out);
+      ts.getRange(ts.getLastRow() + 1, 1, out.length, out[0].length).setValues(out);
     }
+
+    // -------- TOAST MESSAGES --------
+    if (!result.hasPeople) {
+      showToast(
+        ss,
+        'There were no people for this event. Ensure the people have been registered for this event correctly.'
+      );
+      return;
+    }
+
+    if (result.successCount > 0 && result.invalidFee) {
+      showToast(
+        ss,
+        'Transactions updated successfully, but the fee could not be extracted. Ask the treasurer to update the transaction values manually.'
+      );
+      return;
+    }
+
+    showToast(ss, 'Transactions updated successfully');
 
   } catch (err) {
-    // For a simple onEdit trigger we don't surface logs to the user.
-    // If you want to debug, remove the try/catch or use Logger.log(err);
+    result.error = err.message || String(err);
+
+    showToast(ss, `An error occurred - ${result.error}`);
+    Logger.log(err);
   }
+}
+
+function showToast(ss, msg, title = 'Transactions') {
+  ss.toast(msg, title, 6);
+}
+
+function parseMoney(v) {
+  if (typeof v === 'number' && !isNaN(v)) return v;
+
+  if (typeof v === 'string') {
+    const trimmed = v.trim();
+    const match = trimmed.match(/^£?\s*(\d+(\.\d+)?)$/);
+
+    if (match) {
+      const num = Number(match[1]);
+      return isNaN(num) ? '' : num;
+    }
+  }
+
+  return '';
+}
+
+// Helper: compares dates ignoring time component
+function isSameDate(d1, d2) {
+  if (!(d1 instanceof Date) || !(d2 instanceof Date)) return false;
+
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth() === d2.getMonth() &&
+         d1.getDate() === d2.getDate();
 }
