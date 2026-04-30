@@ -31,7 +31,7 @@ function onEdit(e) {
     const responses = sh.getRange(dataStartRow, editedCol, numRows, 1).getValues();
 
     const date = sh.getRange(2, editedCol).getValue();
-    const description = `${sh.getRange(1, editedCol).getValue()} ${sh.getRange(4, editedCol).getValue()}`;
+    const description = `${sh.getRange(1, editedCol).getValue()}, ${sh.getRange(4, editedCol).getValue()}`;
 
     const feeValue = sh.getRange(5, editedCol).getValue();
     const feeNumberValue = parseMoney(feeValue);
