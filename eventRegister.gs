@@ -44,19 +44,18 @@ function onEdit(e) {
     if (transactionValue === '') result.invalidFee = true;
 
     // -------- DELETE EXISTING TRANSACTIONS --------
-    const tsData = ts.getDataRange().getValues();
+    const tsLastRow = ts.getLastRow();
+    if (tsLastRow >= 2) {
+      const numTsRows = tsLastRow - 1;
+      const tsDates = ts.getRange(2, 1, numTsRows, 1).getValues();
+      const tsDescs = ts.getRange(2, 4, numTsRows, 1).getValues();
 
-    const filtered = tsData.filter((row, i) => {
-      if (i === 0) return true;
-
-      const rowDate = row[0];
-      const rowDesc = row[3];
-
-      return !(isSameDate(rowDate, date) && rowDesc === description);
-    });
-
-    ts.clearContents();
-    ts.getRange(1, 1, filtered.length, filtered[0].length).setValues(filtered);
+      for (let r = numTsRows - 1; r >= 0; r--) {
+        if (isSameDate(tsDates[r][0], date) && tsDescs[r][0] === description) {
+          ts.deleteRow(r + 2);
+        }
+      }
+    }
 
     // -------- BUILD NEW TRANSACTIONS --------
     const out = [];
