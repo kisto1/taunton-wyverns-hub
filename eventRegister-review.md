@@ -24,6 +24,8 @@ If someone edits a checkbox in rows 1–6 (event metadata rows), `editedCol` is 
 
 ---
 
+**6. MPK addition - we need something that specifies whether an event uses member credit or not, and only add a transaction if it's member credit.
+
 ## Improvement Ideas
 
 **A. Use `deleteRow` instead of clear+rewrite**
