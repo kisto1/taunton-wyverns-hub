@@ -1,3 +1,4 @@
+// Public repo: https://github.com/kisto1/taunton-wyverns-hub
 // For each person attending the event, add a row to Transactions to deduct the fee from the member's balance
 function onEdit(e) {
   const ss = e.source;
